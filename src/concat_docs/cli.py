@@ -3,7 +3,7 @@
 import argparse
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 
@@ -139,7 +139,7 @@ def main() -> None:
         return
 
     output_path = Path(args.output)
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
 
     with output_path.open("w", encoding="utf-8") as out:
         out.write("<!-- concat-docs output -->\n")
