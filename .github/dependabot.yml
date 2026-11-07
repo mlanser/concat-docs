@@ -1,0 +1,26 @@
+# Keeps GitHub Actions pins current.
+#
+# Workflows pin actions by commit SHA with a trailing `# vX.Y.Z` comment. When
+# upstream moves a floating major tag (v5, v6, …), that comment silently stops
+# describing the pinned commit, and zizmor's ref-version-mismatch audit fails —
+# which the `zizmor-required` ruleset turns into a merge block on every PR, not
+# just the one that touched a workflow. Dependabot updates the SHA and the
+# comment together, so the two cannot drift apart.
+version: 2
+
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore(deps)
+    groups:
+      # One PR for all action bumps rather than one per action.
+      actions:
+        patterns: ["*"]
+    # Wait a week before adopting a new release, so a compromised one (the
+    # tj-actions pattern) has time to be caught and yanked before it lands here.
+    # Required by zizmor's dependabot-cooldown audit.
+    cooldown:
+      default-days: 7
