@@ -1,0 +1,38 @@
+# Static analysis of this repo's GitHub Actions workflows (OWASP — The Forge §C/§D).
+# Fails the build on any zizmor finding; branch protection turns that into a merge gate.
+name: zizmor
+
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/**"]
+  # Runs on ALL PRs (no paths filter): `zizmor` is a required status check via the
+  # `zizmor-required` ruleset, so it must report on every PR to main. A paths filter
+  # here would leave any non-workflow PR (docs, secrets, configs) permanently blocked
+  # on a check that never runs. zizmor still only scans .github/workflows/*, so a
+  # non-workflow PR scans the existing (clean) workflows and passes quickly.
+  pull_request:
+
+permissions:
+  contents: read
+
+# Cancel superseded PR runs; let pushes to main finish so main's history keeps
+# a complete check record.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  zizmor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+
+      - name: zizmor
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: uvx zizmor@1.25.2 .

@@ -85,35 +85,41 @@ def main() -> None:
         help="Input .md files and/or directories",
     )
     parser.add_argument(
-        "-o", "--output",
+        "-o",
+        "--output",
         default="combined_docs.md",
         metavar="FILE",
         help="Output file (default: combined_docs.md)",
     )
     parser.add_argument(
-        "-r", "--recursive",
+        "-r",
+        "--recursive",
         action="store_true",
         help="Recurse into subdirectories (default: off)",
     )
     parser.add_argument(
-        "-p", "--pattern",
+        "-p",
+        "--pattern",
         metavar="REGEX",
         help="Only include files whose name matches REGEX",
     )
     parser.add_argument(
-        "-x", "--exclude",
+        "-x",
+        "--exclude",
         metavar="REGEX",
         help="Exclude files whose path matches REGEX",
     )
     parser.add_argument(
-        "-s", "--separator",
+        "-s",
+        "--separator",
         choices=["banner", "rule", "none"],
         default="banner",
         metavar="STYLE",
         help="Separator style: banner, rule, or none (default: banner)",
     )
     parser.add_argument(
-        "-n", "--no-header",
+        "-n",
+        "--no-header",
         action="store_true",
         help="Omit the source file label above each file's content",
     )
