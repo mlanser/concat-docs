@@ -81,8 +81,15 @@ commit $msg: _banner _not-main _hooks
     tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
     git diff --cached --name-only --diff-filter=d | sort > "$tmp/staged"
     git diff --name-only | sort > "$tmp/unstaged-before"
+    # Committing only what was staged (e.g. after a `git mv`) must not silently leave
+    # the rest of the work behind: name whatever is still uncommitted.
+    leftovers() {
+        local left; left="$(git status --porcelain)"
+        [ -z "$left" ] || { echo "warning: not in this commit (still uncommitted):" >&2; printf '%s\n' "$left" >&2; }
+    }
     if git commit --quiet -m "$msg"; then
         git --no-pager log --oneline -1
+        leftovers
         exit 0
     fi
     # Fixer hooks (ruff-format, end-of-file-fixer, ...) rewrite staged files and fail
@@ -98,6 +105,7 @@ commit $msg: _banner _not-main _hooks
     while IFS= read -r f; do git add -- "$f"; done < "$tmp/fixed"
     git commit --quiet -m "$msg" || { echo "error: commit failed again after re-staging hook fixes" >&2; exit 1; }
     git --no-pager log --oneline -1
+    leftovers
 
 # Rebase on origin/main, run `just check`, push, and open (or update) the PR. Never merges
 pr: _banner _not-main _clean
@@ -138,10 +146,20 @@ done: _banner _clean
             NONE) echo "error: no PR for $br — open one with 'just pr'" >&2; exit 1 ;;
             *) echo "error: PR for $br is $state — merge it on GitHub first" >&2; exit 1 ;;
         esac
+        head="$(gh pr view "$br" --json headRefOid -q .headRefOid)"
         git switch --quiet main
     fi
     git fetch --quiet origin main
     git merge --quiet --ff-only origin/main
+    # Delete the branch just proven merged, even if GitHub kept its remote copy (repos
+    # with delete_branch_on_merge off) — but only if it holds nothing the PR lacked.
+    if [ "$br" != main ]; then
+        if [ "$(git rev-parse "$br")" = "$head" ]; then
+            git branch --quiet -D "$br" && echo "reaped $br"
+        else
+            echo "kept $br: it has commits that are not in the merged PR" >&2
+        fi
+    fi
     "{{just_executable()}}" tidy
     git --no-pager log --oneline -3
 
