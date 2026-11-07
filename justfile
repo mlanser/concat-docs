@@ -16,6 +16,7 @@ setup:
     uv sync
     prek install --hook-type pre-commit --hook-type post-checkout --hook-type post-merge --hook-type post-rewrite
 
-# Lint with the ruff version .pre-commit-config.yaml pins (CI runs no checks here; no tests yet)
+# Lint + format check with the ruff version .pre-commit-config.yaml pins (CI runs this; no tests yet)
 check:
     uvx ruff@0.15.5 check
+    uvx ruff@0.15.5 format --check

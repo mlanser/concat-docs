@@ -21,3 +21,7 @@ target-version = "py314"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.vulture]
+# The pre-commit hook runs with pass_filenames: false, so vulture needs its paths here.
+paths = ["src"]
