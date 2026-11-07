@@ -25,8 +25,8 @@ in +args:
     "{{just_executable()}}" --justfile "{{justfile()}}" _engine
     devcontainer exec --workspace-folder "$PWD" just "$@"
 
-# Open an interactive shell inside the dev container
-shell:
+# Open an interactive shell inside the dev container (not `shell`: Django repos own that name)
+container-shell:
     #!/usr/bin/env bash
     set -euo pipefail
     [ -d .devcontainer ] || { echo "no .devcontainer/ here — this project runs on the host"; exit 0; }
