@@ -21,8 +21,13 @@ secrets-push $name:
     [ -f .env.refs ] || { echo "error: no .env.refs here" >&2; exit 1; }
     ref="$(grep -E "^${name}=" .env.refs | head -1 | cut -d= -f2- | tr -d '"' || true)"
     [ -n "$ref" ] || { echo "error: $name is not in .env.refs" >&2; exit 1; }
-    # The value only ever exists in the pass-cli child and the pipe into gh.
-    pass-cli run --env-file <(printf 'VAL=%s\n' "$ref") -- sh -c 'printf "%s" "$VAL"' | gh secret set "$name"
+    # Captured, then checked, then sent: piping pass-cli into gh would start gh even
+    # when the lookup fails, and gh would take the empty stdin as the new value. The
+    # value is never echoed.
+    val="$(pass-cli run --env-file <(printf 'VAL=%s\n' "$ref") -- sh -c 'printf "%s" "$VAL"')" \
+        || { echo "error: Proton Pass lookup failed for $name ($ref); GitHub left unchanged" >&2; exit 1; }
+    [ -n "$val" ] || { echo "error: Proton Pass returned an empty value for $name ($ref); GitHub left unchanged" >&2; exit 1; }
+    printf '%s' "$val" | gh secret set "$name"
     echo "pushed $name → GitHub secrets"
 
 # Fail if a name listed in .github/secrets.txt is missing from this repo's GitHub secrets
