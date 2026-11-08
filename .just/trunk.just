@@ -126,8 +126,23 @@ pr: _banner _not-main _clean
     if [ -n "$open_url" ]; then
         echo "updated PR: $open_url"
     else
-        title="$(git log --reverse --format=%s origin/main..HEAD | head -1)"
-        body="$(git log --reverse --format='- %s' origin/main..HEAD)"
+        # A branch started from another unmerged branch carries that branch's commits.
+        # Title and body come from this branch's own commits: those on no other branch
+        # on origin. The stacked-on branch is named, since its PR must merge first.
+        others=()
+        while IFS= read -r ref; do
+            case "$ref" in origin/main|origin/HEAD|"origin/$br") ;; *) others+=("$ref") ;; esac
+        done < <(git for-each-ref --format='%(refname:short)' refs/remotes/origin)
+        own=(origin/main..HEAD)
+        [ "${#others[@]}" -eq 0 ] || own+=(--not "${others[@]}")
+        [ -n "$(git log --oneline "${own[@]}")" ] || own=(origin/main..HEAD)
+        for ref in ${others[@]+"${others[@]}"}; do
+            if [ -n "$(git log --oneline "origin/main..$ref")" ] && git merge-base --is-ancestor "$ref" HEAD; then
+                echo "note: stacked on $ref — merge its PR first; this diff includes its commits until then"
+            fi
+        done
+        title="$(git log --reverse --format=%s "${own[@]}" | head -1)"
+        body="$(git log --reverse --format='- %s' "${own[@]}")"
         issue="$(printf '%s' "$br" | sed -nE 's#^[a-z]+/([0-9]+)-.*#\1#p')"
         [ -z "$issue" ] || body="$body"$'\n\n'"Closes #$issue"
         gh pr create --base main --head "$br" --title "$title" --body "$body"
