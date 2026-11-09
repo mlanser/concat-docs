@@ -20,8 +20,10 @@ act $job="" $event="pull_request":
         [ -z "$DOCKER_HOST" ] || export DOCKER_HOST
     fi
     # --pull=false: use the local runner image (still pulled when missing) instead of
-    # re-downloading several GB on every run.
-    args=("$event" --pull=false -P ubuntu-latest=catthehacker/ubuntu:act-latest)
+    # re-downloading several GB on every run. Gate jobs run on `[self-hosted, f451]`
+    # (steve), deploy jobs on ubuntu-latest: both get the same image.
+    img=catthehacker/ubuntu:act-latest
+    args=("$event" --pull=false -P "ubuntu-latest=$img" -P "self-hosted=$img")
     [ -z "$job" ] || args+=(-j "$job")
     [ "$(uname -s)-$(uname -m)" != Darwin-arm64 ] || args+=(--container-architecture linux/amd64)
     # Secrets are passed by NAME (-s NAME); act reads the values from the environment,
@@ -29,8 +31,20 @@ act $job="" $event="pull_request":
     GITHUB_TOKEN="$(gh auth token)"
     export GITHUB_TOKEN
     args+=(-s GITHUB_TOKEN)
+    run=(gh act)
     if [ -f .env.refs ]; then
         for name in $(grep -E '^[A-Za-z_][A-Za-z0-9_]*=' .env.refs | cut -d= -f1); do args+=(-s "$name"); done
-        exec pass-cli run --env-file .env.refs -- gh act "${args[@]}"
+        run=(pass-cli run --env-file .env.refs -- gh act)
     fi
-    exec gh act "${args[@]}"
+    # act skips a job whose runs-on label has no -P image and still exits 0 — a green
+    # run that ran nothing. Watch the output for that and fail instead.
+    set +e
+    "${run[@]}" "${args[@]}" 2>&1 \
+        | awk '{ print; fflush() } /Skipping unsupported platform/ { s = 1 } END { exit s ? 3 : 0 }'
+    status=("${PIPESTATUS[@]}")
+    set -e
+    if [ "${status[1]}" = 3 ]; then
+        echo "error: act skipped a job: no -P image for its runs-on labels" >&2
+        exit 1
+    fi
+    exit "${status[0]}"
