@@ -26,7 +26,16 @@ status: _banner
     echo "vs origin/main: $ahead ahead, $behind behind · $dirty uncommitted file(s)"
     br="$(git branch --show-current)"
     if [ -n "$br" ] && [ "$br" != main ]; then
-        echo "PR: $(gh pr view "$br" --json state,url -q '.state + " " + .url' 2>/dev/null || echo none)"
+        # "none" only when gh says so; an API failure (token, network) is not "no PR".
+        err="$(mktemp)"
+        if pr="$(gh pr view "$br" --json state,url -q '.state + " " + .url' 2>"$err")"; then
+            echo "PR: $pr"
+        elif grep -qi 'no pull requests found' "$err"; then
+            echo "PR: none"
+        else
+            echo "PR: unknown ($(head -n 1 "$err"))"
+        fi
+        rm -f "$err"
     fi
 
 # Start a branch off a fresh origin/main: `just start feat/x`, or `just start 42` for issue #42
@@ -122,7 +131,17 @@ pr: _banner _not-main _clean
     [ -n "$(git log --oneline origin/main..HEAD)" ] || { echo "error: $br has no commits beyond origin/main" >&2; exit 1; }
     "{{just_executable()}}" check
     git push --quiet --force-with-lease -u origin HEAD
-    open_url="$(gh pr view "$br" --json state,url -q 'select(.state == "OPEN") | .url' 2>/dev/null || true)"
+    # A failed lookup must not read as "no open PR": that would open a second one.
+    err="$(mktemp)"
+    if open_url="$(gh pr view "$br" --json state,url -q 'select(.state == "OPEN") | .url' 2>"$err")"; then
+        :
+    elif grep -qi 'no pull requests found' "$err"; then
+        open_url=""
+    else
+        echo "error: gh could not look up the PR for $br, so no PR was opened or updated:" >&2
+        cat "$err" >&2; rm -f "$err"; exit 1
+    fi
+    rm -f "$err"
     if [ -n "$open_url" ]; then
         echo "updated PR: $open_url"
     else
@@ -155,7 +174,18 @@ done: _banner _clean
     set -euo pipefail
     br="$(git branch --show-current)"
     if [ "$br" != main ]; then
-        state="$(gh pr view "$br" --json state -q .state 2>/dev/null || echo NONE)"
+        # NONE only when gh says there is no PR; an API failure (expired token,
+        # network) once read as "no PR" for a merged one (f451labs-templates#28).
+        err="$(mktemp)"
+        if state="$(gh pr view "$br" --json state -q .state 2>"$err")"; then
+            :
+        elif grep -qi 'no pull requests found' "$err"; then
+            state=NONE
+        else
+            echo "error: gh could not look up the PR for $br:" >&2
+            cat "$err" >&2; rm -f "$err"; exit 1
+        fi
+        rm -f "$err"
         case "$state" in
             MERGED) ;;
             NONE) echo "error: no PR for $br — open one with 'just pr'" >&2; exit 1 ;;
